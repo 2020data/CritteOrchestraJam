@@ -24,15 +24,20 @@
       0%, 100% { transform: rotate(-3deg); }
       50% { transform: rotate(3deg); }
     }
-    @keyframes pulse-mouth {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.3) translateY(2px); }
+    @keyframes float-up {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-45px) scale(1.3); }
     }
     .critter-bounce {
       animation: bounce-scale 0.4s ease-out;
     }
     .wiggle-hover:hover {
       animation: wiggle 0.6s infinite ease-in-out;
+    }
+    .float-bubble {
+      animation: float-up 0.8s forwards ease-out;
+      pointer-events: none;
+      position: absolute;
     }
     /* 自訂霓虹與浮雕陰影 */
     .pop-shadow {
@@ -54,32 +59,112 @@
 </head>
 <body class="bg-amber-50 text-slate-800 min-h-screen flex flex-col justify-between selection:bg-amber-300">
 
-  <!-- 頂部導覽列 -->
-  <header class="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg sticky top-0 z-40">
-    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+  <!-- 頂部導覽列：含全站總點閱數 Ticker 與連擊狂歡提示 -->
+  <header class="bg-gradient-to-r from-amber-600 via-orange-500 to-rose-600 text-white shadow-lg sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
       <div class="flex items-center space-x-2">
-        <span class="text-3xl">🪳</span>
+        <span class="text-3xl animate-bounce">🪳</span>
         <div>
-          <h1 class="font-fun text-xl md:text-2xl font-bold tracking-wider flex items-center gap-2">
+          <h1 class="font-fun text-lg md:text-2xl font-bold tracking-wider flex items-center gap-2">
             奇葩生物叫聲大亂鬥
-            <span class="text-xs bg-yellow-300 text-yellow-900 px-2 py-0.5 rounded-full font-bold">迷因 x 科普</span>
+            <span class="text-[10px] md:text-xs bg-yellow-300 text-yellow-950 px-2 py-0.5 rounded-full font-bold">人氣即時排行</span>
           </h1>
-          <p class="text-xs text-amber-100 hidden sm:block">蟑螂、螞蟻、烏龜、鱉... 誰才是自然界靈魂歌王？</p>
+          <p class="text-[11px] text-amber-100 hidden sm:block">點擊叫聲為喜歡的生物瘋狂洗榜！</p>
         </div>
       </div>
       
-      <!-- 主音量與聲音狀態 -->
-      <div class="flex items-center gap-3">
-        <button id="audio-init-btn" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1.5 rounded-full border border-white/40 flex items-center gap-1.5 transition">
+      <!-- 總點閱數與音訊狀態 -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- 全站總點閱數計數器 -->
+        <div class="bg-black/30 border border-white/20 rounded-xl px-2.5 py-1 text-right flex flex-col items-end">
+          <span class="text-[9px] uppercase tracking-wider text-amber-200 font-bold flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 總點閱播放
+          </span>
+          <div class="font-mono text-sm sm:text-base font-black text-yellow-300 flex items-center gap-0.5" id="total-views-display">
+            000,000
+          </div>
+        </div>
+
+        <button id="audio-init-btn" class="bg-white/20 hover:bg-white/30 text-white text-xs px-2.5 py-2 rounded-xl border border-white/40 flex items-center gap-1 transition">
           <span id="audio-icon">🔊</span>
-          <span id="audio-status-text">音訊已就緒</span>
+          <span id="audio-status-text" class="hidden sm:inline">音訊</span>
         </button>
       </div>
     </div>
+
+    <!-- 狂歡連擊條 (Frenzy Bar) -->
+    <div id="frenzy-bar-container" class="h-1.5 bg-black/20 w-full overflow-hidden">
+      <div id="frenzy-bar" class="h-full bg-yellow-300 w-0 transition-all duration-200"></div>
+    </div>
   </header>
 
+  <!-- 即時四強人氣應援看板 (Popularity Leaderboard Widget) -->
+  <div class="max-w-5xl mx-auto w-full px-4 pt-3">
+    <div class="bg-white rounded-2xl p-3 md:p-4 shadow border border-amber-200 flex flex-col gap-2">
+      <div class="flex items-center justify-between text-xs text-slate-500 font-bold border-b border-slate-100 pb-2">
+        <span class="flex items-center gap-1.5 text-slate-700">
+          <span>🔥</span> 即時生物叫聲熱播榜 (點擊叫聲即時應援)
+        </span>
+        <span id="frenzy-badge" class="hidden text-[11px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black animate-pulse">
+          ⚡ 狂歡模式 x2 點閱中！
+        </span>
+      </div>
+
+      <!-- 四強百分比進度與數據排布 -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center" id="popularity-overview">
+        <!-- 蟑螂 -->
+        <div class="p-2 rounded-xl bg-amber-50/80 border border-amber-200 relative overflow-hidden" id="card-rank-cockroach">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-amber-900 flex items-center gap-1">🪳 蟑螂</span>
+            <span class="rank-tag text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-200 text-amber-900">#--</span>
+          </div>
+          <div class="text-sm font-black text-amber-950 mt-1" id="stat-count-cockroach">0 播</div>
+          <div class="w-full bg-amber-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+            <div id="bar-cockroach" class="bg-amber-700 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <!-- 螞蟻 -->
+        <div class="p-2 rounded-xl bg-stone-50/80 border border-stone-200 relative overflow-hidden" id="card-rank-ant">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-stone-900 flex items-center gap-1">🐜 螞蟻</span>
+            <span class="rank-tag text-[10px] font-black px-1.5 py-0.2 rounded bg-stone-200 text-stone-900">#--</span>
+          </div>
+          <div class="text-sm font-black text-stone-950 mt-1" id="stat-count-ant">0 播</div>
+          <div class="w-full bg-stone-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+            <div id="bar-ant" class="bg-stone-700 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <!-- 烏龜 -->
+        <div class="p-2 rounded-xl bg-emerald-50/80 border border-emerald-200 relative overflow-hidden" id="card-rank-turtle">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-emerald-950 flex items-center gap-1">🐢 烏龜</span>
+            <span class="rank-tag text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-900">#--</span>
+          </div>
+          <div class="text-sm font-black text-emerald-950 mt-1" id="stat-count-turtle">0 播</div>
+          <div class="w-full bg-emerald-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+            <div id="bar-turtle" class="bg-emerald-700 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <!-- 鱉 -->
+        <div class="p-2 rounded-xl bg-cyan-50/80 border border-cyan-200 relative overflow-hidden" id="card-rank-softshell">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-cyan-950 flex items-center gap-1">⚡ 鱉</span>
+            <span class="rank-tag text-[10px] font-black px-1.5 py-0.2 rounded bg-cyan-200 text-cyan-900">#--</span>
+          </div>
+          <div class="text-sm font-black text-cyan-950 mt-1" id="stat-count-softshell">0 播</div>
+          <div class="w-full bg-cyan-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+            <div id="bar-softshell" class="bg-cyan-700 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 模式切換按鈕區 -->
-  <nav class="max-w-5xl mx-auto w-full px-4 pt-4">
+  <nav class="max-w-5xl mx-auto w-full px-4 pt-3">
     <div class="bg-white p-1.5 rounded-2xl shadow-md border-2 border-amber-200 flex flex-wrap sm:flex-nowrap gap-1">
       <button onclick="switchTab('soundboard')" id="tab-soundboard" class="tab-btn flex-1 py-2.5 px-3 rounded-xl font-bold text-sm md:text-base transition text-center flex items-center justify-center gap-2 bg-amber-500 text-white shadow">
         <span>📢</span> 叫聲探索盤
@@ -94,17 +179,22 @@
   </nav>
 
   <!-- 主內容容器 -->
-  <main class="max-w-5xl mx-auto w-full px-4 py-4 flex-1">
+  <main class="max-w-5xl mx-auto w-full px-4 py-3 flex-1">
     
     <!-- ================= 模式 1: 叫聲探索盤 ================= -->
     <section id="panel-soundboard" class="space-y-4">
-      <div class="bg-amber-100/70 border border-amber-300 rounded-2xl p-4 text-center">
-        <h2 class="text-lg md:text-xl font-bold text-amber-900 flex items-center justify-center gap-2">
-          <span>✨</span> 點擊角色，見證奇葩生物發聲奇蹟！ <span>✨</span>
-        </h2>
-        <p class="text-xs md:text-sm text-amber-800 mt-1">
-          純 Web Audio 類比音效合成！包含<strong>科學真實發聲</strong>與<strong>網路迷因名場面</strong>。點擊按鈕來發出叫聲！
-        </p>
+      <div class="bg-amber-100/70 border border-amber-300 rounded-2xl p-3.5 text-center flex items-center justify-between flex-wrap gap-2">
+        <div class="text-left">
+          <h2 class="text-base md:text-lg font-bold text-amber-900 flex items-center gap-1.5">
+            <span>✨</span> 點擊按鈕發聲，即時累加該叫聲點閱！
+          </h2>
+          <p class="text-xs text-amber-800">
+            短時間連續猛戳將進入<strong>狂歡加倍模式</strong>，點閱數飆升！
+          </p>
+        </div>
+        <button onclick="resetViewsData()" class="text-[11px] bg-white/70 hover:bg-white text-slate-600 px-2.5 py-1 rounded-lg border border-slate-300 transition">
+          重置點閱統計
+        </button>
       </div>
 
       <!-- 四大生物卡片 Grid -->
@@ -119,31 +209,27 @@
                 蟑螂 (Cockroach)
               </h3>
             </div>
-            <span class="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-lg">氣孔噴氣 / 振翅</span>
+            <div class="text-right">
+              <span class="text-xs font-black text-amber-900 bg-amber-100 px-2 py-1 rounded-lg block" id="badge-total-cockroach">0 次播放</span>
+              <span class="text-[10px] text-amber-700">氣孔噴氣 / 振翅</span>
+            </div>
           </div>
 
           <!-- 生物動畫大圖示 -->
-          <div class="my-4 flex flex-col items-center justify-center relative min-h-[140px]">
-            <div id="avatar-cockroach" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('cockroach', 0)">
+          <div class="my-4 flex flex-col items-center justify-center relative min-h-[130px]">
+            <div id="avatar-cockroach" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('cockroach', 0, event)">
               <!-- SVG 蟑螂頭像 -->
               <svg width="120" height="110" viewBox="0 0 120 110" class="drop-shadow-md">
-                <!-- 觸角 -->
                 <path d="M 50 40 Q 30 10 15 2" stroke="#5D3A1A" stroke-width="3" stroke-linecap="round" fill="none" class="animate-pulse" />
                 <path d="M 70 40 Q 90 10 105 2" stroke="#5D3A1A" stroke-width="3" stroke-linecap="round" fill="none" class="animate-pulse" />
-                <!-- 身體 -->
                 <ellipse cx="60" cy="65" rx="36" ry="40" fill="#78350f" />
-                <!-- 翅膀紋理 -->
                 <path d="M 60 30 L 60 102 M 40 50 Q 60 65 40 85 M 80 50 Q 60 65 80 85" stroke="#451a03" stroke-width="2.5" fill="none" />
-                <!-- 頭部 -->
                 <ellipse cx="60" cy="35" rx="20" ry="16" fill="#451a03" />
-                <!-- 眼睛 -->
                 <circle cx="50" cy="32" r="5" fill="#fef08a" />
                 <circle cx="70" cy="32" r="5" fill="#fef08a" />
                 <circle cx="51" cy="32" r="2.5" fill="#000" />
                 <circle cx="69" cy="32" r="2.5" fill="#000" />
-                <!-- 嘴巴（發聲時開口） -->
                 <ellipse id="mouth-cockroach" cx="60" cy="42" rx="4" ry="2" fill="#ef4444" />
-                <!-- 腳 -->
                 <path d="M 28 50 L 10 40 M 25 70 L 8 75 M 30 88 L 14 100" stroke="#78350f" stroke-width="4" stroke-linecap="round" />
                 <path d="M 92 50 L 110 40 M 95 70 L 112 75 M 90 88 L 106 100" stroke="#78350f" stroke-width="4" stroke-linecap="round" />
               </svg>
@@ -154,22 +240,24 @@
             </div>
           </div>
 
-          <!-- 聲音按鈕群 -->
+          <!-- 聲音按鈕群 (附帶各聲音獨立點播量) -->
           <div class="grid grid-cols-2 gap-2 mt-2">
-            <button onclick="playCritterAudio('cockroach', 'hiss')" class="pop-shadow pop-shadow-active bg-amber-800 hover:bg-amber-900 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>💨</span> 馬島排氣嘶聲
+            <button onclick="playCritterAudio('cockroach', 'hiss', event)" class="pop-shadow pop-shadow-active bg-amber-800 hover:bg-amber-900 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>💨</span> 馬島排氣嘶聲</div>
+              <span class="text-[10px] text-amber-200 font-mono" id="subcount-cockroach-hiss">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('cockroach', 'meme')" class="pop-shadow pop-shadow-active bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>😱</span> 被拖鞋追殺尖叫
+            <button onclick="playCritterAudio('cockroach', 'meme', event)" class="pop-shadow pop-shadow-active bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>😱</span> 拖鞋追殺尖叫</div>
+              <span class="text-[10px] text-yellow-200 font-mono" id="subcount-cockroach-meme">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('cockroach', 'rustle')" class="pop-shadow pop-shadow-active bg-amber-700 hover:bg-amber-800 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1 col-span-2">
-              <span>🦗</span> 廚房午夜狂奔沙沙聲
+            <button onclick="playCritterAudio('cockroach', 'rustle', event)" class="pop-shadow pop-shadow-active bg-amber-700 hover:bg-amber-800 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-between col-span-2">
+              <span class="flex items-center gap-1"><span>🦗</span> 廚房午夜狂奔沙沙聲</span>
+              <span class="text-[10px] text-amber-200 font-mono" id="subcount-cockroach-rustle">0 聽</span>
             </button>
           </div>
 
-          <!-- 科普小貼士 -->
           <div class="mt-3 bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-[11px] text-amber-900">
-            <strong>💡 科普真相：</strong> 蟑螂沒有聲帶！但「馬達加斯加發聲蟑螂」受威脅或求偶時，會強力從第4腹節氣門噴出空氣，產生宛如響尾蛇的嘶嘶聲！
+            <strong>💡 科普真相：</strong> 蟑螂沒有聲帶！但「馬達加斯加發聲蟑螂」受威脅或求偶時，會強力從氣門噴出空氣，產生宛如響尾蛇的嘶嘶聲！
           </div>
         </div>
 
@@ -182,58 +270,53 @@
                 螞蟻 (Ant)
               </h3>
             </div>
-            <span class="text-xs font-bold text-stone-700 bg-stone-100 px-2 py-1 rounded-lg">腹節發音器 / 超聲波</span>
+            <div class="text-right">
+              <span class="text-xs font-black text-stone-900 bg-stone-100 px-2 py-1 rounded-lg block" id="badge-total-ant">0 次播放</span>
+              <span class="text-[10px] text-stone-700">腹節發音器 / 超聲波</span>
+            </div>
           </div>
 
-          <!-- 生物動畫大圖示 -->
-          <div class="my-4 flex flex-col items-center justify-center relative min-h-[140px]">
-            <div id="avatar-ant" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('ant', 0)">
-              <!-- SVG 螞蟻頭像 -->
+          <div class="my-4 flex flex-col items-center justify-center relative min-h-[130px]">
+            <div id="avatar-ant" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('ant', 0, event)">
               <svg width="120" height="110" viewBox="0 0 120 110" class="drop-shadow-md">
-                <!-- 觸角 -->
                 <path d="M 52 40 L 40 22 L 30 25" stroke="#292524" stroke-width="3" stroke-linecap="round" fill="none" />
                 <path d="M 68 40 L 80 22 L 90 25" stroke="#292524" stroke-width="3" stroke-linecap="round" fill="none" />
-                <!-- 肚子三節 -->
                 <ellipse cx="60" cy="85" rx="28" ry="18" fill="#1c1917" />
                 <ellipse cx="60" cy="62" rx="14" ry="12" fill="#292524" />
                 <circle cx="60" cy="42" r="16" fill="#44403c" />
-                <!-- 大顎 -->
                 <path d="M 52 54 Q 50 62 45 64" stroke="#e11d48" stroke-width="3" fill="none" stroke-linecap="round" />
                 <path d="M 68 54 Q 70 62 75 64" stroke="#e11d48" stroke-width="3" fill="none" stroke-linecap="round" />
-                <!-- 眼睛 -->
                 <circle cx="53" cy="40" r="4.5" fill="#f8fafc" />
                 <circle cx="67" cy="40" r="4.5" fill="#f8fafc" />
                 <circle cx="53" cy="40" r="2.5" fill="#000" />
                 <circle cx="67" cy="40" r="2.5" fill="#000" />
-                <!-- 嘴 -->
                 <ellipse id="mouth-ant" cx="60" cy="50" rx="3" ry="2" fill="#e11d48" />
-                <!-- 6 隻腳 -->
                 <path d="M 48 62 L 20 55 M 48 65 L 18 72 M 52 70 L 22 90" stroke="#292524" stroke-width="3" stroke-linecap="round" />
                 <path d="M 72 62 L 100 55 M 72 65 L 102 72 M 68 70 L 98 90" stroke="#292524" stroke-width="3" stroke-linecap="round" />
               </svg>
             </div>
-            <!-- 對話氣泡 -->
             <div id="bubble-ant" class="absolute -top-1 bg-stone-800 text-yellow-300 text-xs font-bold py-1 px-3 rounded-full shadow opacity-0 transition-opacity pointer-events-none whitespace-nowrap">
               唧唧唧～搬甜甜圈！
             </div>
           </div>
 
-          <!-- 聲音按鈕群 -->
           <div class="grid grid-cols-2 gap-2 mt-2">
-            <button onclick="playCritterAudio('ant', 'stridulation')" class="pop-shadow pop-shadow-active bg-stone-700 hover:bg-stone-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>🔬</span> 腹節摩擦高頻唧唧
+            <button onclick="playCritterAudio('ant', 'stridulation', event)" class="pop-shadow pop-shadow-active bg-stone-700 hover:bg-stone-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>🔬</span> 腹節摩擦高頻</div>
+              <span class="text-[10px] text-stone-300 font-mono" id="subcount-ant-stridulation">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('ant', 'march')" class="pop-shadow pop-shadow-active bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>🐜</span> 工蟻搬運軍隊口號
+            <button onclick="playCritterAudio('ant', 'march', event)" class="pop-shadow pop-shadow-active bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>🐜</span> 工蟻軍隊口號</div>
+              <span class="text-[10px] text-emerald-200 font-mono" id="subcount-ant-march">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('ant', 'sos')" class="pop-shadow pop-shadow-active bg-stone-600 hover:bg-stone-700 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1 col-span-2">
-              <span>🆘</span> 地底受困求救訊號 (Tap Tap)
+            <button onclick="playCritterAudio('ant', 'sos', event)" class="pop-shadow pop-shadow-active bg-stone-600 hover:bg-stone-700 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-between col-span-2">
+              <span class="flex items-center gap-1"><span>🆘</span> 地底受困求救訊號 (Tap Tap)</span>
+              <span class="text-[10px] text-stone-300 font-mono" id="subcount-ant-sos">0 聽</span>
             </button>
           </div>
 
-          <!-- 科普小貼士 -->
           <div class="mt-3 bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-[11px] text-stone-900">
-            <strong>💡 科普真相：</strong> 許多螞蟻（如紅火蟻、切葉蟻）腹部有微小的發音刮器（Stridulatory organ），摩擦時發出人類肉耳難以辨識的超聲波，向蟻后與夥伴求救！
+            <strong>💡 科普真相：</strong> 許多螞蟻腹部有微小的發音刮器，摩擦時發出人類難以聽見的超聲波向蟻后與同伴求救！
           </div>
         </div>
 
@@ -246,61 +329,57 @@
                 烏龜 (Turtle)
               </h3>
             </div>
-            <span class="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-1 rounded-lg">肺部排氣 / 迷因呻吟</span>
+            <div class="text-right">
+              <span class="text-xs font-black text-emerald-900 bg-emerald-100 px-2 py-1 rounded-lg block" id="badge-total-turtle">0 次播放</span>
+              <span class="text-[10px] text-emerald-800">肺部排氣 / 迷因呻吟</span>
+            </div>
           </div>
 
-          <!-- 生物動畫大圖示 -->
-          <div class="my-4 flex flex-col items-center justify-center relative min-h-[140px]">
-            <div id="avatar-turtle" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('turtle', 0)">
-              <!-- SVG 烏龜頭像 -->
+          <div class="my-4 flex flex-col items-center justify-center relative min-h-[130px]">
+            <div id="avatar-turtle" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('turtle', 0, event)">
               <svg width="120" height="110" viewBox="0 0 120 110" class="drop-shadow-md">
-                <!-- 烏龜硬殼 -->
                 <ellipse cx="60" cy="65" rx="42" ry="32" fill="#15803d" />
                 <ellipse cx="60" cy="65" rx="36" ry="26" fill="#166534" />
-                <!-- 龜殼六角盾片 -->
                 <polygon points="60,45 70,55 70,70 60,80 50,70 50,55" fill="#22c55e" stroke="#14532d" stroke-width="2" />
                 <polygon points="45,45 50,55 50,70 42,75 35,65 35,52" fill="#4ade80" stroke="#14532d" stroke-width="1.5" />
                 <polygon points="75,45 85,52 85,65 78,75 70,70 70,55" fill="#4ade80" stroke="#14532d" stroke-width="1.5" />
-                <!-- 四肢 -->
                 <ellipse cx="25" cy="50" rx="9" ry="7" fill="#86efac" />
                 <ellipse cx="95" cy="50" rx="9" ry="7" fill="#86efac" />
                 <ellipse cx="30" cy="88" rx="8" ry="6" fill="#86efac" />
                 <ellipse cx="90" cy="88" rx="8" ry="6" fill="#86efac" />
-                <!-- 頭頸（伸縮） -->
                 <rect x="52" y="20" width="16" height="22" rx="7" fill="#86efac" />
                 <circle cx="60" cy="22" r="14" fill="#4ade80" />
                 <circle cx="54" cy="18" r="3" fill="#000" />
                 <circle cx="66" cy="18" r="3" fill="#000" />
-                <!-- 嘴巴（魔性啊～） -->
                 <ellipse id="mouth-turtle" cx="60" cy="28" rx="5" ry="4" fill="#b91c1c" />
               </svg>
             </div>
-            <!-- 對話氣泡 -->
             <div id="bubble-turtle" class="absolute -top-1 bg-emerald-900 text-yellow-300 text-xs font-bold py-1 px-3 rounded-full shadow opacity-0 transition-opacity pointer-events-none whitespace-nowrap">
               欸！啊～～～！
             </div>
           </div>
 
-          <!-- 聲音按鈕群 -->
           <div class="grid grid-cols-2 gap-2 mt-2">
-            <button onclick="playCritterAudio('turtle', 'meme_grunt')" class="pop-shadow pop-shadow-active bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>🤣</span> 經典迷因「啊～」
+            <button onclick="playCritterAudio('turtle', 'meme_grunt', event)" class="pop-shadow pop-shadow-active bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>🤣</span> 經典迷因「啊～」</div>
+              <span class="text-[10px] text-emerald-200 font-mono" id="subcount-turtle-meme_grunt">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('turtle', 'shell_knock')" class="pop-shadow pop-shadow-active bg-amber-800 hover:bg-amber-900 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>🪵</span> 咚咚厚實敲殼聲
+            <button onclick="playCritterAudio('turtle', 'shell_knock', event)" class="pop-shadow pop-shadow-active bg-amber-800 hover:bg-amber-900 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>🪵</span> 咚咚厚實敲殼</div>
+              <span class="text-[10px] text-amber-200 font-mono" id="subcount-turtle-shell_knock">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('turtle', 'sigh')" class="pop-shadow pop-shadow-active bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1 col-span-2">
-              <span>😮‍💨</span> 長壽沉重嘆息聲
+            <button onclick="playCritterAudio('turtle', 'sigh', event)" class="pop-shadow pop-shadow-active bg-teal-700 hover:bg-teal-800 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-between col-span-2">
+              <span class="flex items-center gap-1"><span>😮‍💨</span> 長壽沉重嘆息聲</span>
+              <span class="text-[10px] text-teal-200 font-mono" id="subcount-turtle-sigh">0 聽</span>
             </button>
           </div>
 
-          <!-- 科普小貼士 -->
           <div class="mt-3 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 text-[11px] text-emerald-950">
-            <strong>💡 科普真相：</strong> 網路爆紅的「啊～」烏龜叫聲，其實是陸龜（如象龜）求偶交配時用力將空氣擠壓過喉部所發出的喉音，既深情又搞笑！
+            <strong>💡 科普真相：</strong> 網路爆紅的「啊～」叫聲，是陸龜在求偶時用力將空氣擠壓過喉部所發出的深情喉音！
           </div>
         </div>
 
-        <!-- 卡片 4: 鱉 (Softshell Turtle) -->
+        <!-- 卡片 4: 鱉 -->
         <div class="bg-white rounded-3xl p-5 border-4 border-cyan-900/20 shadow-md relative overflow-hidden transition-all duration-200 hover:border-cyan-800">
           <div class="flex items-start justify-between">
             <div>
@@ -309,62 +388,55 @@
                 鱉 / 中華鱉 (Softshell)
               </h3>
             </div>
-            <span class="text-xs font-bold text-cyan-800 bg-cyan-100 px-2 py-1 rounded-lg">狂暴蛇嘶 / 剪刀咬合</span>
+            <div class="text-right">
+              <span class="text-xs font-black text-cyan-900 bg-cyan-100 px-2 py-1 rounded-lg block" id="badge-total-softshell">0 次播放</span>
+              <span class="text-[10px] text-cyan-800">狂暴蛇嘶 / 剪刀咬合</span>
+            </div>
           </div>
 
-          <!-- 生物動畫大圖示 -->
-          <div class="my-4 flex flex-col items-center justify-center relative min-h-[140px]">
-            <div id="avatar-softshell" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('softshell', 0)">
-              <!-- SVG 鱉頭像 (軟軟的皮革殼 + 尖尖的豬鼻子 + 兇狠眼神) -->
+          <div class="my-4 flex flex-col items-center justify-center relative min-h-[130px]">
+            <div id="avatar-softshell" class="cursor-pointer transition-transform duration-150 transform hover:scale-105" onclick="triggerCritterSound('softshell', 0, event)">
               <svg width="120" height="110" viewBox="0 0 120 110" class="drop-shadow-md">
-                <!-- 軟革質背甲 (邊緣有柔軟褶皺感裙邊) -->
                 <ellipse cx="60" cy="65" rx="46" ry="34" fill="#164e63" />
                 <ellipse cx="60" cy="65" rx="41" ry="29" fill="#0e7490" />
-                <!-- 裙邊波紋 -->
                 <path d="M 20 65 Q 16 75 25 80 Q 35 95 60 98 Q 85 95 95 80 Q 104 75 100 65" stroke="#155e75" stroke-width="2.5" fill="none" />
-                <!-- 蹼爪 -->
                 <path d="M 22 45 L 8 40 L 16 55 Z" fill="#0891b2" />
                 <path d="M 98 45 L 112 40 L 104 55 Z" fill="#0891b2" />
                 <path d="M 24 82 L 10 92 L 25 96 Z" fill="#0891b2" />
                 <path d="M 96 82 L 110 92 L 95 96 Z" fill="#0891b2" />
-                <!-- 尖長的脖子與尖鼻頭 -->
                 <path d="M 54 40 L 52 18 L 68 18 L 66 40 Z" fill="#0891b2" />
-                <!-- 尖嘴與豬鼻狀吻突 -->
                 <polygon points="52,18 68,18 60,6" fill="#06b6d4" />
-                <!-- 豬鼻子雙孔 -->
                 <circle cx="58" cy="8" r="1.2" fill="#083344" />
                 <circle cx="62" cy="8" r="1.2" fill="#083344" />
-                <!-- 兇惡上揚眼 -->
                 <circle cx="54" cy="18" r="3.5" fill="#fef08a" />
                 <circle cx="66" cy="18" r="3.5" fill="#fef08a" />
                 <line x1="53" y1="15" x2="56" y2="21" stroke="#000" stroke-width="2" />
                 <line x1="67" y1="15" x2="64" y2="21" stroke="#000" stroke-width="2" />
-                <!-- 鋒利的喙/嘴 (咬人卡嗒) -->
                 <path id="mouth-softshell" d="M 54 19 Q 60 23 66 19" stroke="#ef4444" stroke-width="3" fill="none" />
               </svg>
             </div>
-            <!-- 對話氣泡 -->
             <div id="bubble-softshell" class="absolute -top-1 bg-cyan-900 text-yellow-300 text-xs font-bold py-1 px-3 rounded-full shadow opacity-0 transition-opacity pointer-events-none whitespace-nowrap">
               咬住等打雷才放開！咔擦！
             </div>
           </div>
 
-          <!-- 聲音按鈕群 -->
           <div class="grid grid-cols-2 gap-2 mt-2">
-            <button onclick="playCritterAudio('softshell', 'anger_hiss')" class="pop-shadow pop-shadow-active bg-cyan-900 hover:bg-cyan-950 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>🐍</span> 毒蛇級防衛長嘶
+            <button onclick="playCritterAudio('softshell', 'anger_hiss', event)" class="pop-shadow pop-shadow-active bg-cyan-900 hover:bg-cyan-950 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>🐍</span> 毒蛇級防衛長嘶</div>
+              <span class="text-[10px] text-cyan-200 font-mono" id="subcount-softshell-anger_hiss">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('softshell', 'snap_bite')" class="pop-shadow pop-shadow-active bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1">
-              <span>⚡</span> 咬合重擊「咔嚓」
+            <button onclick="playCritterAudio('softshell', 'snap_bite', event)" class="pop-shadow pop-shadow-active bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs sm:text-sm flex flex-col items-center justify-center relative">
+              <div class="flex items-center gap-1"><span>⚡</span> 咬合重擊「咔嚓」</div>
+              <span class="text-[10px] text-yellow-200 font-mono" id="subcount-softshell-snap_bite">0 聽</span>
             </button>
-            <button onclick="playCritterAudio('softshell', 'water_grunt')" class="pop-shadow pop-shadow-active bg-teal-800 hover:bg-teal-900 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1 col-span-2">
-              <span>🫧</span> 泥潭水底咕嚕咆哮
+            <button onclick="playCritterAudio('softshell', 'water_grunt', event)" class="pop-shadow pop-shadow-active bg-teal-800 hover:bg-teal-900 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-between col-span-2">
+              <span class="flex items-center gap-1"><span>🫧</span> 泥潭水底咕嚕咆哮</span>
+              <span class="text-[10px] text-teal-200 font-mono" id="subcount-softshell-water_grunt">0 聽</span>
             </button>
           </div>
 
-          <!-- 科普小貼士 -->
           <div class="mt-3 bg-cyan-50 p-2.5 rounded-xl border border-cyan-200 text-[11px] text-cyan-950">
-            <strong>💡 科普真相：</strong> 鱉的殼沒有角質盾片，而是柔軟的革質皮！被激怒時，牠會像毒蛇般伸長脖子狂暴嘶鳴，咬合力強勁。俗語說「鱉咬人，打雷才放」，其實是形容牠驚恐咬住的特性！
+            <strong>💡 科普真相：</strong> 鱉的背部覆蓋柔軟革質皮。被激怒時會像蛇一樣噴氣示威，咬合力驚人！
           </div>
         </div>
 
@@ -374,7 +446,6 @@
     <!-- ================= 模式 2: 聽音辨生物 (Quiz) ================= -->
     <section id="panel-quiz" class="hidden space-y-5">
       <div class="bg-white rounded-3xl p-6 shadow-md border-4 border-amber-300 max-w-2xl mx-auto text-center">
-        <!-- 計分與難度稱號 -->
         <div class="flex items-center justify-between mb-4 border-b pb-3">
           <div class="text-left">
             <span class="text-xs text-slate-500 font-bold block">目前連勝記錄</span>
@@ -390,35 +461,31 @@
           </div>
         </div>
 
-        <!-- 播放神祕聲音大按鈕 -->
         <div class="my-6">
-          <button id="quiz-play-btn" onclick="playQuizQuestionSound()" class="w-32 h-32 md:w-36 md:h-36 mx-auto rounded-full bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500 text-white shadow-xl flex flex-col items-center justify-center transform transition active:scale-95 hover:scale-105 border-4 border-white">
+          <button id="quiz-play-btn" onclick="playQuizQuestionSound(event)" class="w-32 h-32 md:w-36 md:h-36 mx-auto rounded-full bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500 text-white shadow-xl flex flex-col items-center justify-center transform transition active:scale-95 hover:scale-105 border-4 border-white">
             <span class="text-5xl mb-1">▶️</span>
             <span class="font-bold text-sm">播放神祕叫聲</span>
           </button>
-          <p class="text-xs text-slate-500 mt-2" id="quiz-hint-text">點擊上方大圓鈕聽聲音，再選出是哪位主角！</p>
+          <p class="text-xs text-slate-500 mt-2" id="quiz-hint-text">答對題目前的主角還能獲得額外 +10 應援點閱！</p>
         </div>
 
-        <!-- 四選一選項 -->
         <div class="grid grid-cols-2 gap-3 mt-6">
-          <button onclick="handleQuizAnswer('cockroach')" class="quiz-opt-btn p-4 rounded-2xl border-2 border-amber-700/30 bg-amber-50 hover:bg-amber-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
+          <button onclick="handleQuizAnswer('cockroach', event)" class="quiz-opt-btn p-4 rounded-2xl border-2 border-amber-700/30 bg-amber-50 hover:bg-amber-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
             <span class="text-2xl">🪳</span> 蟑螂
           </button>
-          <button onclick="handleQuizAnswer('ant')" class="quiz-opt-btn p-4 rounded-2xl border-2 border-stone-700/30 bg-stone-50 hover:bg-stone-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
+          <button onclick="handleQuizAnswer('ant', event)" class="quiz-opt-btn p-4 rounded-2xl border-2 border-stone-700/30 bg-stone-50 hover:bg-stone-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
             <span class="text-2xl">🐜</span> 螞蟻
           </button>
-          <button onclick="handleQuizAnswer('turtle')" class="quiz-opt-btn p-4 rounded-2xl border-2 border-emerald-700/30 bg-emerald-50 hover:bg-emerald-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
+          <button onclick="handleQuizAnswer('turtle', event)" class="quiz-opt-btn p-4 rounded-2xl border-2 border-emerald-700/30 bg-emerald-50 hover:bg-emerald-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
             <span class="text-2xl">🐢</span> 烏龜
           </button>
-          <button onclick="handleQuizAnswer('softshell')" class="quiz-opt-btn p-4 rounded-2xl border-2 border-cyan-800/30 bg-cyan-50 hover:bg-cyan-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
+          <button onclick="handleQuizAnswer('softshell', event)" class="quiz-opt-btn p-4 rounded-2xl border-2 border-cyan-800/30 bg-cyan-50 hover:bg-cyan-100 font-bold text-base md:text-lg flex items-center justify-center gap-2 transition active:scale-95">
             <span class="text-2xl">⚡</span> 鱉 (中華鱉)
           </button>
         </div>
 
-        <!-- 答題反饋顯示區 -->
         <div id="quiz-feedback-box" class="mt-5 p-3 rounded-xl hidden text-sm font-bold"></div>
 
-        <!-- 下一題按鈕 -->
         <button id="quiz-next-btn" onclick="nextQuizQuestion()" class="mt-4 bg-slate-900 text-white font-bold py-2.5 px-8 rounded-xl hidden mx-auto transition hover:bg-slate-800">
           下一題 ➡️
         </button>
@@ -433,10 +500,9 @@
             <h2 class="text-xl md:text-2xl font-black text-purple-900 font-fun flex items-center gap-2">
               <span>🥁</span> 奇葩生物 16 步進編曲機
             </h2>
-            <p class="text-xs text-slate-500">點選格子點亮節拍，打造蟑螂、螞蟻、烏龜、鱉的阿卡貝拉合唱團！</p>
+            <p class="text-xs text-slate-500">演奏過程自動為演奏的主角瘋狂刷點閱榜！</p>
           </div>
 
-          <!-- 播放控制群 -->
           <div class="flex items-center gap-3">
             <button id="seq-play-toggle" onclick="toggleSequencer()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2 rounded-xl text-sm shadow flex items-center gap-1.5 transition active:scale-95">
               <span id="seq-play-icon">▶️</span> <span id="seq-play-label">開始演奏</span>
@@ -450,7 +516,6 @@
           </div>
         </div>
 
-        <!-- 速度 (BPM) 控制條 -->
         <div class="my-4 flex items-center gap-4 bg-purple-50 p-3 rounded-2xl border border-purple-200">
           <span class="text-xs font-bold text-purple-900 flex items-center gap-1">
             <span>⏱️</span> 速度: <strong id="bpm-display">120</strong> BPM
@@ -458,11 +523,8 @@
           <input type="range" id="bpm-slider" min="60" max="200" value="120" step="5" oninput="updateBpm(this.value)" class="flex-1 accent-purple-600 cursor-pointer">
         </div>
 
-        <!-- 16-Step 網格序列 (4軌道) -->
         <div class="overflow-x-auto no-scrollbar py-2">
           <div class="min-w-[620px] space-y-3">
-            
-            <!-- 軌道 1: 蟑螂 (Hi-Hat / 摩擦) -->
             <div class="flex items-center gap-2 bg-amber-50/70 p-2 rounded-2xl border border-amber-200">
               <div class="w-24 flex items-center gap-1.5 flex-shrink-0">
                 <span class="text-xl">🪳</span>
@@ -474,7 +536,6 @@
               <div class="grid grid-cols-16 gap-1 flex-1" id="track-cockroach"></div>
             </div>
 
-            <!-- 軌道 2: 螞蟻 (Rimshot / 咔嗒) -->
             <div class="flex items-center gap-2 bg-stone-50/70 p-2 rounded-2xl border border-stone-200">
               <div class="w-24 flex items-center gap-1.5 flex-shrink-0">
                 <span class="text-xl">🐜</span>
@@ -486,7 +547,6 @@
               <div class="grid grid-cols-16 gap-1 flex-1" id="track-ant"></div>
             </div>
 
-            <!-- 軌道 3: 烏龜 (Kick & Bass / 啊～) -->
             <div class="flex items-center gap-2 bg-emerald-50/70 p-2 rounded-2xl border border-emerald-200">
               <div class="w-24 flex items-center gap-1.5 flex-shrink-0">
                 <span class="text-xl">🐢</span>
@@ -498,7 +558,6 @@
               <div class="grid grid-cols-16 gap-1 flex-1" id="track-turtle"></div>
             </div>
 
-            <!-- 軌道 4: 鱉 (Snare / 咬擊咔嚓) -->
             <div class="flex items-center gap-2 bg-cyan-50/70 p-2 rounded-2xl border border-cyan-200">
               <div class="w-24 flex items-center gap-1.5 flex-shrink-0">
                 <span class="text-xl">⚡</span>
@@ -509,11 +568,9 @@
               </div>
               <div class="grid grid-cols-16 gap-1 flex-1" id="track-softshell"></div>
             </div>
-
           </div>
         </div>
 
-        <!-- 演奏舞台區 (隨節奏跳舞) -->
         <div class="mt-4 bg-slate-900 rounded-2xl p-4 text-center text-white flex justify-around items-center">
           <div id="dancer-cockroach" class="transition-transform duration-100 flex flex-col items-center">
             <span class="text-3xl">🪳</span>
@@ -532,22 +589,196 @@
             <span class="text-[10px] text-slate-300">狂暴鱉</span>
           </div>
         </div>
-
       </div>
     </section>
 
   </main>
 
-  <!-- 頁尾 -->
   <footer class="bg-amber-100 border-t border-amber-200 py-4 text-center text-xs text-amber-800">
-    <p>💡 本遊戲音效皆使用瀏覽器 Web Audio API 及語音合成技術自製，純天然無添加任何外部音檔！</p>
+    <p>💡 本遊戲音效皆使用瀏覽器 Web Audio API 自製合成！每次播放皆真實計入點閱排行榜！</p>
     <p class="mt-0.5 text-amber-700/80">愛護動物，請勿隨意惹火脾氣暴躁的中華鱉與廚房半夜的強哥。</p>
   </footer>
 
-  <!-- ================= JavaScript: Web Audio 與遊戲核心邏輯 ================= -->
+  <!-- ================= JavaScript: Web Audio 與點閱統計系統 ================= -->
   <script>
     /* ==========================================================================
-       1. Web Audio API 聲音引擎 (純合成、無外部依賴)
+       0. 點閱數與人氣排行統計系統 (View Counter & Leaderboard System)
+       ========================================================================== */
+    const DEFAULT_STATS = {
+      totalViews: 88640,
+      critters: {
+        turtle: 38240,     // 迷因烏龜預設人氣極高
+        cockroach: 24510,
+        softshell: 15300,
+        ant: 10590
+      },
+      sounds: {
+        'cockroach-hiss': 8200,
+        'cockroach-meme': 12450,
+        'cockroach-rustle': 3860,
+        'ant-stridulation': 3910,
+        'ant-march': 4420,
+        'ant-sos': 2260,
+        'turtle-meme_grunt': 28900,
+        'turtle-shell_knock': 5420,
+        'turtle-sigh': 3920,
+        'softshell-anger_hiss': 6800,
+        'softshell-snap_bite': 6100,
+        'softshell-water_grunt': 2400
+      }
+    };
+
+    let stats = loadStats();
+    let frenzyClicks = 0;
+    let frenzyMultiplier = 1;
+    let frenzyTimer = null;
+
+    function loadStats() {
+      try {
+        const saved = localStorage.getItem('critter_game_stats_v2');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.warn('LocalStorage error:', e);
+      }
+      return JSON.parse(JSON.stringify(DEFAULT_STATS));
+    }
+
+    function saveStats() {
+      try {
+        localStorage.setItem('critter_game_stats_v2', JSON.stringify(stats));
+      } catch (e) {}
+    }
+
+    // 格式化數字 (例如 12,345 或 1.2k)
+    function formatNumber(num) {
+      return num.toLocaleString();
+    }
+
+    // 浮動「+1」或「+N」粒子特效
+    function spawnFloatingBubble(x, y, text = "+1", isFrenzy = false) {
+      const bubble = document.createElement('div');
+      bubble.className = `float-bubble font-black z-50 text-sm md:text-base ${
+        isFrenzy ? 'text-rose-500 scale-125' : 'text-amber-600'
+      }`;
+      bubble.textContent = text;
+      bubble.style.left = `${x}px`;
+      bubble.style.top = `${y}px`;
+      document.body.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 800);
+    }
+
+    // 觸發狂歡連點暴擊 (Frenzy Bonus)
+    function recordFrenzyClick() {
+      frenzyClicks++;
+      const frenzyBar = document.getElementById('frenzy-bar');
+      const frenzyBadge = document.getElementById('frenzy-badge');
+
+      const percent = Math.min((frenzyClicks / 10) * 100, 100);
+      frenzyBar.style.width = `${percent}%`;
+
+      if (frenzyClicks >= 10) {
+        frenzyMultiplier = 2;
+        frenzyBadge.classList.remove('hidden');
+      }
+
+      if (frenzyTimer) clearTimeout(frenzyTimer);
+      frenzyTimer = setTimeout(() => {
+        frenzyClicks = 0;
+        frenzyMultiplier = 1;
+        frenzyBar.style.width = '0%';
+        frenzyBadge.classList.add('hidden');
+      }, 1500);
+    }
+
+    // 增加點閱核心函數
+    function addViewCount(critter, soundKey = null, amount = 1, event = null) {
+      const earned = amount * frenzyMultiplier;
+      stats.totalViews += earned;
+      if (stats.critters[critter] !== undefined) {
+        stats.critters[critter] += earned;
+      }
+      if (soundKey) {
+        const fullKey = `${critter}-${soundKey}`;
+        if (stats.sounds[fullKey] !== undefined) {
+          stats.sounds[fullKey] += earned;
+        } else {
+          stats.sounds[fullKey] = earned;
+        }
+      }
+
+      saveStats();
+      renderStatsUI();
+      recordFrenzyClick();
+
+      // 在滑鼠/點擊位置生出浮動動畫
+      if (event && event.clientX) {
+        spawnFloatingBubble(event.clientX - 10, event.clientY - 20, `+${earned}`, frenzyMultiplier > 1);
+      }
+    }
+
+    function renderStatsUI() {
+      // 1. 總點閱
+      const totalDisplay = document.getElementById('total-views-display');
+      if (totalDisplay) {
+        totalDisplay.textContent = formatNumber(stats.totalViews);
+      }
+
+      // 2. 四位生物排行榜排行計算
+      const entries = Object.entries(stats.critters).sort((a, b) => b[1] - a[1]);
+      const maxCount = Math.max(...Object.values(stats.critters), 1);
+      const totalCritterPlays = Object.values(stats.critters).reduce((a, b) => a + b, 0) || 1;
+
+      entries.forEach(([critter, count], index) => {
+        // 更新數量文字
+        const countElem = document.getElementById(`stat-count-${critter}`);
+        if (countElem) countElem.textContent = `${formatNumber(count)} 播`;
+
+        const badgeElem = document.getElementById(`badge-total-${critter}`);
+        if (badgeElem) badgeElem.textContent = `${formatNumber(count)} 次播放`;
+
+        // 百分比條
+        const bar = document.getElementById(`bar-${critter}`);
+        if (bar) {
+          const pct = Math.round((count / totalCritterPlays) * 100);
+          bar.style.width = `${pct}%`;
+        }
+
+        // 排名標籤
+        const card = document.getElementById(`card-rank-${critter}`);
+        if (card) {
+          const rankTag = card.querySelector('.rank-tag');
+          if (rankTag) {
+            if (index === 0) {
+              rankTag.className = 'rank-tag text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-400 text-yellow-950 shadow-sm flex items-center gap-0.5';
+              rankTag.innerHTML = `👑 No.1`;
+            } else if (index === 1) {
+              rankTag.className = 'rank-tag text-[10px] font-black px-1.5 py-0.2 rounded bg-orange-200 text-orange-950';
+              rankTag.textContent = `🔥 No.2`;
+            } else {
+              rankTag.className = 'rank-tag text-[10px] font-black px-1.5 py-0.2 rounded bg-slate-200 text-slate-700';
+              rankTag.textContent = `#${index + 1}`;
+            }
+          }
+        }
+      });
+
+      // 3. 各子聲音點閱數
+      Object.entries(stats.sounds).forEach(([key, count]) => {
+        const elem = document.getElementById(`subcount-${key}`);
+        if (elem) {
+          elem.textContent = `${formatNumber(count)} 聽`;
+        }
+      });
+    }
+
+    function resetViewsData() {
+      stats = JSON.parse(JSON.stringify(DEFAULT_STATS));
+      saveStats();
+      renderStatsUI();
+    }
+
+    /* ==========================================================================
+       1. Web Audio API 聲音引擎
        ========================================================================== */
     let audioCtx = null;
 
@@ -562,17 +793,15 @@
       return audioCtx;
     }
 
-    // 初始化點擊喚醒
     document.getElementById('audio-init-btn').addEventListener('click', () => {
       const ctx = getAudioContext();
       if (ctx.state === 'running') {
         const status = document.getElementById('audio-status-text');
-        status.textContent = "音訊運作中";
-        status.parentElement.classList.add("bg-emerald-600/40");
+        status.textContent = "就緒";
+        status.parentElement.classList.add("bg-emerald-600/50");
       }
     });
 
-    // 產生白噪音緩衝區
     function createNoiseBuffer(duration = 1.0) {
       const ctx = getAudioContext();
       const bufferSize = ctx.sampleRate * duration;
@@ -584,62 +813,43 @@
       return buffer;
     }
 
-    /* --------------------------------------------------------------------------
-       聲音合成器庫 (Cockroach, Ant, Turtle, Softshell)
-       -------------------------------------------------------------------------- */
     const SoundEngine = {
-      // 1. 蟑螂發聲：
-      // (A) 馬島蟑螂氣孔嘶鳴 (Hiss)
       cockroachHiss() {
         const ctx = getAudioContext();
         const noise = ctx.createBufferSource();
         noise.buffer = createNoiseBuffer(0.8);
-
-        // 帶通濾波器模擬氣孔噴氣共振
         const filter = ctx.createBiquadFilter();
         filter.type = "bandpass";
         filter.frequency.setValueAtTime(3200, ctx.currentTime);
         filter.Q.setValueAtTime(4.0, ctx.currentTime);
-
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.01, ctx.currentTime);
         gain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 0.15);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.75);
-
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
-
         noise.start();
         noise.stop(ctx.currentTime + 0.8);
       },
 
-      // (B) 迷因蟑螂慘叫 (滑音驚恐)
       cockroachMeme() {
         const ctx = getAudioContext();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
         osc.type = "sawtooth";
-        // 快速上滑再急墜模擬尖叫
         osc.frequency.setValueAtTime(300, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.15);
         osc.frequency.linearRampToValueAtTime(700, ctx.currentTime + 0.4);
-
         gain.gain.setValueAtTime(0.3, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         osc.start();
         osc.stop(ctx.currentTime + 0.5);
-
-        // 若支援語音合成，可搭配魔性發音
         speakWord("啊！拖鞋！", 1.8, 1.6);
       },
 
-      // (C) 廚房疾走沙沙聲 (Rustle)
       cockroachRustle() {
         const ctx = getAudioContext();
         for (let i = 0; i < 7; i++) {
@@ -657,42 +867,31 @@
         }
       },
 
-      // 2. 螞蟻發聲：
-      // (A) 超微觀高頻摩擦 (Stridulation)
       antStridulation() {
         const ctx = getAudioContext();
         const t = ctx.currentTime;
-        // 調頻 (FM) 模擬極細微的甲殼摩擦
         const carrier = ctx.createOscillator();
         const modulator = ctx.createOscillator();
         const modGain = ctx.createGain();
         const gain = ctx.createGain();
-
         carrier.type = "sine";
         carrier.frequency.setValueAtTime(4200, t);
-
         modulator.type = "square";
         modulator.frequency.setValueAtTime(120, t);
         modGain.gain.setValueAtTime(800, t);
-
         modulator.connect(carrier.frequency);
-
         gain.gain.setValueAtTime(0.2, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-
         carrier.connect(gain);
         gain.connect(ctx.destination);
-
         modulator.start(t);
         carrier.start(t);
         modulator.stop(t + 0.35);
         carrier.stop(t + 0.35);
       },
 
-      // (B) 工蟻行軍口號 (一二一！)
       antMarch() {
         const ctx = getAudioContext();
-        // 快速兩個微小清脆的音「噠噠」
         [0, 0.12, 0.24].forEach((delay, idx) => {
           const t = ctx.currentTime + delay;
           const osc = ctx.createOscillator();
@@ -709,7 +908,6 @@
         speakWord("一二一！", 2.0, 1.8);
       },
 
-      // (C) 螞蟻求救拍擊 (SOS Tap)
       antSos() {
         const ctx = getAudioContext();
         [0, 0.08, 0.16, 0.3, 0.38, 0.46].forEach((delay) => {
@@ -727,43 +925,31 @@
         });
       },
 
-      // 3. 烏龜發聲：
-      // (A) 經典迷因烏龜叫 (Aahh! Grunt - 雙共振峰喉音合成)
       turtleMemeGrunt() {
         const ctx = getAudioContext();
         const t = ctx.currentTime;
         const duration = 0.55;
-
-        // 雙鋸齒波加喉腔濾波
         const osc = ctx.createOscillator();
         osc.type = "sawtooth";
-        // 迷因音高：短短抬頭後拉長「欸～啊～」
         osc.frequency.setValueAtTime(260, t);
         osc.frequency.linearRampToValueAtTime(320, t + 0.1);
         osc.frequency.exponentialRampToValueAtTime(180, t + duration);
-
-        // Formant 濾波模擬喉音
         const formant = ctx.createBiquadFilter();
         formant.type = "bandpass";
         formant.frequency.setValueAtTime(750, t);
         formant.Q.setValueAtTime(3.5, t);
-
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.01, t);
         gain.gain.linearRampToValueAtTime(0.5, t + 0.08);
         gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-
         osc.connect(formant);
         formant.connect(gain);
         gain.connect(ctx.destination);
-
         osc.start(t);
         osc.stop(t + duration);
-
         speakWord("欸！啊！", 0.8, 1.2);
       },
 
-      // (B) 厚實敲殼聲 (Shell Knock)
       turtleShellKnock() {
         const ctx = getAudioContext();
         const t = ctx.currentTime;
@@ -772,88 +958,68 @@
         osc.type = "sine";
         osc.frequency.setValueAtTime(140, t);
         osc.frequency.exponentialRampToValueAtTime(45, t + 0.2);
-
         gain.gain.setValueAtTime(0.6, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(t);
         osc.stop(t + 0.26);
       },
 
-      // (C) 烏龜長嘆 (Sigh)
       turtleSigh() {
         const ctx = getAudioContext();
         const t = ctx.currentTime;
         const noise = ctx.createBufferSource();
         noise.buffer = createNoiseBuffer(0.9);
-
         const filter = ctx.createBiquadFilter();
         filter.type = "lowpass";
         filter.frequency.setValueAtTime(800, t);
         filter.frequency.linearRampToValueAtTime(300, t + 0.8);
-
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.05, t);
         gain.gain.linearRampToValueAtTime(0.3, t + 0.2);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
-
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
-
         noise.start(t);
         noise.stop(t + 0.9);
       },
 
-      // 4. 鱉發聲 (Softshell Turtle)：
-      // (A) 憤怒毒蛇級防衛長嘶 (Anger Hiss)
       softshellAngerHiss() {
         const ctx = getAudioContext();
         const t = ctx.currentTime;
         const noise = ctx.createBufferSource();
         noise.buffer = createNoiseBuffer(1.0);
-
-        // 高通濾波加上劇烈波動
         const filter = ctx.createBiquadFilter();
         filter.type = "highpass";
         filter.frequency.setValueAtTime(2500, t);
-
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0.01, t);
         gain.gain.linearRampToValueAtTime(0.55, t + 0.1);
         gain.gain.setValueAtTime(0.45, t + 0.6);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.95);
-
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
-
         noise.start(t);
         noise.stop(t + 1.0);
       },
 
-      // (B) 咬合重擊 Snap Bite (卡嚓！)
       softshellSnapBite() {
         const ctx = getAudioContext();
         const t = ctx.currentTime;
-        // 短暫衝擊高頻爆音
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "triangle";
         osc.frequency.setValueAtTime(900, t);
         osc.frequency.exponentialRampToValueAtTime(80, t + 0.08);
-
         gain.gain.setValueAtTime(0.7, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(t);
         osc.stop(t + 0.11);
-
-        // 伴隨一小段金屬/骨質咬合碰撞
         const noise = ctx.createBufferSource();
         noise.buffer = createNoiseBuffer(0.06);
         const nGain = ctx.createGain();
@@ -864,7 +1030,6 @@
         noise.start(t);
       },
 
-      // (C) 水泥潭底咕嚕咆哮 (Water Grunt)
       softshellWaterGrunt() {
         const ctx = getAudioContext();
         const t = ctx.currentTime;
@@ -872,23 +1037,16 @@
         const mod = ctx.createOscillator();
         const modGain = ctx.createGain();
         const gain = ctx.createGain();
-
         osc.type = "sine";
         osc.frequency.setValueAtTime(110, t);
-
-        // 氣泡調製
         mod.type = "sine";
         mod.frequency.setValueAtTime(25, t);
         modGain.gain.setValueAtTime(60, t);
-
         mod.connect(osc.frequency);
-
         gain.gain.setValueAtTime(0.4, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
-
         mod.start(t);
         osc.start(t);
         mod.stop(t + 0.45);
@@ -896,7 +1054,6 @@
       }
     };
 
-    // 瀏覽器語音合成語音輔助 (增加惡搞感)
     function speakWord(text, pitch = 1.0, rate = 1.2) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -926,7 +1083,7 @@
 
       if (avatar) {
         avatar.classList.remove('critter-bounce');
-        void avatar.offsetWidth; // 重置動畫
+        void avatar.offsetWidth;
         avatar.classList.add('critter-bounce');
       }
 
@@ -948,8 +1105,7 @@
       }
     }
 
-    // 點擊卡片頭像時隨機播放一種聲音
-    function triggerCritterSound(critter) {
+    function triggerCritterSound(critter, idx, event) {
       const actions = {
         cockroach: ['hiss', 'meme', 'rustle'],
         ant: ['stridulation', 'march', 'sos'],
@@ -958,12 +1114,15 @@
       };
       const list = actions[critter];
       const randomAction = list[Math.floor(Math.random() * list.length)];
-      playCritterAudio(critter, randomAction);
+      playCritterAudio(critter, randomAction, event);
     }
 
-    function playCritterAudio(critter, type) {
+    function playCritterAudio(critter, type, event = null) {
       getAudioContext();
       triggerCritterAnimation(critter);
+
+      // 累加點閱數
+      addViewCount(critter, type, 1, event);
 
       switch (type) {
         case 'hiss': SoundEngine.cockroachHiss(); break;
@@ -1042,25 +1201,23 @@
       feedback.classList.add('hidden');
       document.getElementById('quiz-next-btn').classList.add('hidden');
 
-      // 隨機抽選一題
       const item = quizSoundBank[Math.floor(Math.random() * quizSoundBank.length)];
       currentQuizTarget = item.critter;
       currentQuizSoundAction = item.action;
 
-      // 播放題目
       playQuizQuestionSound();
     }
 
-    function playQuizQuestionSound() {
+    function playQuizQuestionSound(event = null) {
       if (!currentQuizTarget) return;
-      playCritterAudio(currentQuizTarget, currentQuizSoundAction);
+      playCritterAudio(currentQuizTarget, currentQuizSoundAction, event);
       
       const btn = document.getElementById('quiz-play-btn');
       btn.classList.add('scale-110', 'ring-4', 'ring-amber-300');
       setTimeout(() => btn.classList.remove('scale-110', 'ring-4', 'ring-amber-300'), 300);
     }
 
-    function handleQuizAnswer(selectedCritter) {
+    function handleQuizAnswer(selectedCritter, event = null) {
       if (quizLocked) return;
       quizLocked = true;
 
@@ -1077,20 +1234,20 @@
       };
 
       if (selectedCritter === currentQuizTarget) {
-        // 答對
         quizStreak++;
         streakElem.textContent = quizStreak;
         feedback.className = "mt-5 p-3 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900";
-        feedback.innerHTML = `🎉 答對了！這正是 <strong>${critterNames[currentQuizTarget]}</strong>！辨識力驚人！`;
+        feedback.innerHTML = `🎉 答對了！這正是 <strong>${critterNames[currentQuizTarget]}</strong>！已為牠注入 +10 應援點閱！`;
+
+        // 答對獎勵 +10 點閱
+        addViewCount(currentQuizTarget, null, 10, event);
       } else {
-        // 答錯
         quizStreak = 0;
         streakElem.textContent = quizStreak;
         feedback.className = "mt-5 p-3 rounded-xl bg-rose-100 border border-rose-300 text-rose-900";
         feedback.innerHTML = `❌ 哎呀猜錯了！正確答案是 <strong>${critterNames[currentQuizTarget]}</strong>！再接再厲！`;
       }
 
-      // 更新頭銜
       let curTitle = rankTitles[0].title;
       for (const r of rankTitles) {
         if (quizStreak >= r.streak) curTitle = r.title;
@@ -1118,7 +1275,6 @@
     let bpm = 120;
     let timerId = null;
 
-    // 建立 16 步進按鈕
     function initSequencerUI() {
       TRACKS.forEach(track => {
         const container = document.getElementById(`track-${track}`);
@@ -1127,22 +1283,24 @@
           const btn = document.createElement('button');
           btn.dataset.track = track;
           btn.dataset.step = i;
-          // 每 4 拍有小間隔顏色區分
           const isQuarter = (i % 4 === 0);
           btn.className = `step-btn h-9 md:h-10 rounded-lg border text-[11px] font-bold transition flex items-center justify-center ${
             isQuarter ? 'border-slate-400 bg-white' : 'border-slate-200 bg-slate-50'
           } hover:brightness-95`;
           btn.textContent = (i + 1);
 
-          btn.addEventListener('click', () => {
+          btn.addEventListener('click', (e) => {
             gridState[track][i] = !gridState[track][i];
             updateStepButton(btn, gridState[track][i], track);
+            if (gridState[track][i]) {
+              playTrackSound(track);
+              addViewCount(track, null, 1, e);
+            }
           });
           container.appendChild(btn);
         }
       });
 
-      // 載入一套好玩的預設拍子
       randomPresetSequencer();
     }
 
@@ -1187,10 +1345,8 @@
     function scheduleNextStep() {
       if (!isPlaying) return;
 
-      // 觸發當前步進發聲
       stepTick(currentStep);
 
-      // 計算下一個 Step 間隔 (以 16 分音符為基礎: (60 / BPM) / 4 * 1000)
       const intervalMs = (60 / bpm / 4) * 1000;
       currentStep = (currentStep + 1) % STEP_COUNT;
 
@@ -1200,7 +1356,6 @@
     function stepTick(stepIndex) {
       clearHighlightSteps();
 
-      // 高亮當前步進
       TRACKS.forEach(track => {
         const container = document.getElementById(`track-${track}`);
         const btn = container.children[stepIndex];
@@ -1208,10 +1363,11 @@
           btn.classList.add('ring-2', 'ring-purple-500');
         }
 
-        // 若該軌有打點則發聲
         if (gridState[track][stepIndex]) {
           playTrackSound(track);
           animateDancer(track);
+          // 伴隨演奏自動累積點閱（不產生過密全屏氣泡）
+          addViewCount(track, null, 1);
         }
       });
     }
@@ -1224,22 +1380,10 @@
 
     function playTrackSound(track) {
       switch (track) {
-        case 'cockroach':
-          // 短促噴氣摩擦
-          SoundEngine.cockroachHiss();
-          break;
-        case 'ant':
-          // 迷你清脆踏步
-          SoundEngine.antMarch();
-          break;
-        case 'turtle':
-          // 迷因低音烏龜啊～
-          SoundEngine.turtleMemeGrunt();
-          break;
-        case 'softshell':
-          // 猛烈咬合響音
-          SoundEngine.softshellSnapBite();
-          break;
+        case 'cockroach': SoundEngine.cockroachHiss(); break;
+        case 'ant': SoundEngine.antMarch(); break;
+        case 'turtle': SoundEngine.turtleMemeGrunt(); break;
+        case 'softshell': SoundEngine.softshellSnapBite(); break;
       }
     }
 
@@ -1270,12 +1414,11 @@
 
     function randomPresetSequencer() {
       clearSequencer();
-      // 一個具有洗腦動感的拉丁/Funk節奏排布
       const preset = {
-        cockroach: [0, 2, 4, 6, 8, 10, 12, 14], // 充當 Hi-Hat 律動
-        ant: [2, 6, 10, 14],                    // 輕巧反拍切分
-        turtle: [0, 8, 11],                     // 迷因重低音 Kick
-        softshell: [4, 12]                      // 強力 Snare 咬擊
+        cockroach: [0, 2, 4, 6, 8, 10, 12, 14],
+        ant: [2, 6, 10, 14],
+        turtle: [0, 8, 11],
+        softshell: [4, 12]
       };
 
       TRACKS.forEach(track => {
@@ -1289,8 +1432,12 @@
       });
     }
 
-    // 頁面加載完成初始化
+    // 頁面初次載入
     window.addEventListener('DOMContentLoaded', () => {
+      // 每次進入頁面給予自然增長訪問
+      stats.totalViews += Math.floor(Math.random() * 5) + 1;
+      saveStats();
+      renderStatsUI();
       initSequencerUI();
     });
   </script>
